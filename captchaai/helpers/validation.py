@@ -1,0 +1,41 @@
+# ── What this file IS ─────────────────────────────────────────────────────────
+# The input validator: checks the caller supplied every required param BEFORE any
+# HTTP call is made. It exists to catch bad input early so we never waste an API
+# call (and a thread) on a request the API would just reject.
+
+from __future__ import annotations
+
+from ..core.registry import CaptchaTypeEntry
+from ..exceptions import ValidationError
+
+
+def validate(params: dict, entry: CaptchaTypeEntry) -> None:
+    """Ensure every required param for this type is present and non-empty.
+
+    Parameters:
+        params: the params dict the client built (keyed by API param names).
+        entry: the registry row whose `required_params` declares what is needed.
+
+    Raises:
+        ValidationError: if any required param is missing, None, or empty — with a
+        clear message listing exactly what is wrong. Runs FIRST, before any request.
+    """
+    # A param fails if it is absent, None, or an empty/whitespace-only string.
+    missing = [
+        name
+        for name in entry.required_params
+        if params.get(name) is None
+        or (isinstance(params.get(name), str) and not params[name].strip())
+    ]
+    if missing:
+        raise ValidationError(
+            f"{entry.name}: missing required parameter(s): {', '.join(missing)}"
+        )
+
+    for param_name, allowed in entry.valid_values.items():
+        value = params.get(param_name)
+        if value is not None and str(value) not in allowed:
+            raise ValidationError(
+                f"{entry.name}: '{param_name}' must be one of "
+                f"{list(allowed)}, got {value!r}"
+            )

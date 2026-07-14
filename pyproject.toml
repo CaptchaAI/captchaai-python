@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "captchaai-python"
+version = "0.1.0"
+description = "Official Python client for the CaptchaAI captcha-solving API."
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Dev@Captchaai", email = "dev@captchaai.com" },
+]
+dependencies = [
+    "httpx",
+]
+
+[project.urls]
+Homepage = "https://captchaai.com/"
+Repository = "https://github.com/CaptchaAI/captchaai-python"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["captchaai*"]
