@@ -77,7 +77,7 @@ def test_recaptcha_v3_requires_action_at_validation_layer():
     client.close()
 
 
-def test_per_call_proxy_override_without_mutating_config():
+def test_per_call_proxy_override_without_mutating_config(no_sleep):
     handler = default_solve_handler(get_entry("turnstile"))
     client, transport = make_sync_client(handler)
     client.recaptcha_v2(
