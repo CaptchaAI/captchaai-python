@@ -1,6 +1,6 @@
 # CaptchaAI Python SDK
 
-Python client for the [CaptchaAI](<HOMEPAGE_URL>) captcha-solving API.
+Python client for the [CaptchaAI](https://captchaai.com/) captcha-solving API.
 
 Call one method per captcha type; the SDK handles HTTP, polling, retries, and error mapping.
 
