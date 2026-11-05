@@ -19,6 +19,7 @@ For full copy-paste examples of every captcha type and SDK feature, see [example
 ## Table of Contents
 
 - [Examples](https://github.com/CaptchaAI/captchaai-python/blob/main/examples.md)
+- [Packages](#packages)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Solve result](#solve-result)
@@ -37,6 +38,13 @@ For full copy-paste examples of every captcha type and SDK feature, see [example
 - [Proxies](#proxies)
 - [Async usage](#async-usage)
 - [License](#license)
+
+---
+
+## Packages
+
+- **PyPI Package:** [https://pypi.org/project/captchaai/](https://pypi.org/project/captchaai/) (`pip install captchaai`)
+- **GitHub Releases:** [https://github.com/CaptchaAI/captchaai-python/releases](https://github.com/CaptchaAI/captchaai-python/releases)
 
 ---
 
