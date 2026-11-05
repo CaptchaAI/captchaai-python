@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "captchaai"
-version = "1.0.1"
+version = "1.0.2"
 description = "Official Python client for the CaptchaAI captcha-solving API."
 readme = "readme.md"
 requires-python = ">=3.10"
@@ -15,11 +15,59 @@ authors = [
 dependencies = [
     "httpx",
 ]
+keywords = [
+    "captcha",
+    "captchaai",
+    "captcha-solver",
+    "captcha-solving",
+    "captcha-bypass",
+    "recaptcha",
+    "recaptcha-solver",
+    "recaptcha-v2",
+    "recaptcha-v2-solver",
+    "recaptcha-v3",
+    "recaptcha-v3-solver",
+    "recaptcha-enterprise",
+    "cloudflare-turnstile",
+    "turnstile-solver",
+    "cloudflare-challenge",
+    "geetest",
+    "geetest-v3",
+    "geetest-solver",
+    "image-captcha",
+    "text-captcha",
+    "web-scraping",
+    "scraping",
+    "browser-automation",
+    "automation",
+    "api-client",
+    "sdk",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 
 [project.urls]
 Homepage = "https://captchaai.com/"
+Documentation = "https://docs.captchaai.com/"
 Repository = "https://github.com/CaptchaAI/captchaai-python"
+Issues = "https://github.com/CaptchaAI/captchaai-python/issues"
+Changelog = "https://github.com/CaptchaAI/captchaai-python/releases"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["captchaai*"]
+
+[tool.setuptools.package-data]
+captchaai = ["py.typed"]
