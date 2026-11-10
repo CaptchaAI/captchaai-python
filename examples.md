@@ -1202,7 +1202,7 @@ asyncio.run(main())
 
 ### Proxies
 
-Format: `"user:pass@host:port"`. `proxytype` is required whenever a proxy is set (`HTTP`, `HTTPS`, `SOCKS4`, `SOCKS5`).
+Format: `"user:pass@host:port"`. `proxytype` is required whenever a proxy is set (`HTTP` or `HTTPS`).
 
 Client-level (every solve):
 
@@ -1234,7 +1234,7 @@ result = solver.recaptcha_v2(
     sitekey="YOUR_SITEKEY",
     url="https://example.com",
     proxy="user:pass@other-host:port",
-    proxytype="SOCKS5",
+    proxytype="HTTPS",
 )
 print(result.solution)
 solver.close()

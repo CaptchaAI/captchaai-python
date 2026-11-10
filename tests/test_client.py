@@ -84,13 +84,23 @@ def test_per_call_proxy_override_without_mutating_config(no_sleep):
         sitekey="k",
         url="https://example.com",
         proxy="user:pass@other:port",
-        proxytype="SOCKS5",
+        proxytype="HTTPS",
     )
     submit_calls = [c for c in transport.calls if "in.php" in c[1]]
     assert submit_calls[0][2]["proxy"] == "user:pass@other:port"
-    assert submit_calls[0][2]["proxytype"] == "SOCKS5"
+    assert submit_calls[0][2]["proxytype"] == "HTTPS"
     assert client._config.proxy is None
     client.close()
+
+
+@pytest.mark.parametrize("bad_proxytype", ["SOCKS4", "SOCKS5", "FTP"])
+def test_init_rejects_unsupported_proxytype(bad_proxytype: str):
+    with pytest.raises(ValidationError, match="Unsupported proxytype"):
+        CaptchaAI(
+            api_key=VALID_API_KEY,
+            proxy="user:pass@host:port",
+            proxytype=bad_proxytype,
+        )
 
 
 def test_per_call_proxy_without_proxytype_raises():

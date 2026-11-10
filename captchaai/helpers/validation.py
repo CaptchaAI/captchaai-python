@@ -8,6 +8,30 @@ from __future__ import annotations
 from ..core.registry import CaptchaTypeEntry
 from ..exceptions import ValidationError
 
+SUPPORTED_PROXY_TYPES: tuple[str, ...] = ("HTTP", "HTTPS")
+
+
+def validate_proxy_options(proxy: str | None, proxytype: str | None) -> str | None:
+    """Validate optional proxy + proxytype pairing and supported protocol.
+
+    Returns the normalized uppercase proxytype ("HTTP" or "HTTPS") or None.
+    """
+    if proxy and not proxytype:
+        raise ValidationError("proxytype is required when proxy is set")
+    if proxytype is None:
+        return None
+    normalized = proxytype.strip().upper() if isinstance(proxytype, str) else ""
+    if not normalized:
+        if proxy:
+            raise ValidationError("proxytype is required when proxy is set")
+        return None
+    if normalized not in SUPPORTED_PROXY_TYPES:
+        supported = ", ".join(SUPPORTED_PROXY_TYPES)
+        raise ValidationError(
+            f"Unsupported proxytype {proxytype!r}; supported values are: {supported}"
+        )
+    return normalized
+
 
 def validate(params: dict, entry: CaptchaTypeEntry) -> None:
     """Ensure every required param for this type is present and non-empty.

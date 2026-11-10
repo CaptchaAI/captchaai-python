@@ -76,7 +76,7 @@ solver = CaptchaAI(
 |--------|---------|-------------|
 | `api_key` | *(required)* | 32-character CaptchaAI API key |
 | `proxy` | `None` | `"user:pass@host:port"` applied to every solve |
-| `proxytype` | `None` | `HTTP` / `HTTPS` / `SOCKS4` / `SOCKS5` — required when `proxy` is set |
+| `proxytype` | `None` | `HTTP` / `HTTPS` — required when `proxy` is set |
 | `auto_retry` | `True` | `True` = SDK retries transient errors with backoff; `False` = raise immediately |
 | `base_url` | `https://ocr.captchaai.com` | API host for `in.php` / `res.php` |
 | `thread_busy_timeout` | `120.0` | Seconds to keep retrying while all account threads are busy |
@@ -317,11 +317,20 @@ print(result.solution["challenge_uuid"])
 
 ### Thread usage
 
-CaptchaAI is thread-based. Check current usage:
+Check current thread usage:
 
 ```python
 info = solver.threads_info()
 # {"threads": 10, "working_threads": 3}
+```
+
+### Account balance
+
+Check the raw account balance string:
+
+```python
+balance = solver.get_balance()
+# e.g. "12.34"
 ```
 
 ### Manual submit / fetch
@@ -399,7 +408,7 @@ except CaptchaAIError:
 
 ## Proxies
 
-Proxies are supported at client level and per call. Format: `"user:pass@host:port"`. `proxytype` is required whenever a proxy is set (`HTTP`, `HTTPS`, `SOCKS4`, or `SOCKS5`).
+Proxies are supported at client level and per call. Format: `"user:pass@host:port"`. `proxytype` is required whenever a proxy is set (`HTTP` or `HTTPS`).
 
 ```python
 # Client-level (every solve)
@@ -414,7 +423,7 @@ result = solver.recaptcha_v2(
     sitekey="YOUR_SITEKEY",
     url="https://example.com",
     proxy="user:pass@other-host:port",
-    proxytype="SOCKS5",
+    proxytype="HTTPS",
 )
 ```
 

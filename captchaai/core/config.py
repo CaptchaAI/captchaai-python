@@ -21,7 +21,7 @@ class Config:
     # ── User-facing settings ──────────────────────────────────────────────────
     api_key: str  # 32-char CaptchaAI key; validated at startup via threadsinfo
     proxy: str | None = None  # "user:pass@host:port"; forwarded on every solve
-    proxytype: str | None = None  # required when proxy is set: HTTP/HTTPS/SOCKS4/SOCKS5
+    proxytype: str | None = None  # required when proxy is set: HTTP or HTTPS
     auto_retry: bool = True  # True = SDK retries with backoff; False = raise immediately on transient errors
 
     # ── Endpoint settings ─────────────────────────────────────────────────────

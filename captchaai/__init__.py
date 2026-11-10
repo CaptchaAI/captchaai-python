@@ -5,7 +5,9 @@
 
 from .async_client import AsyncCaptchaAI
 from .client import CaptchaAI
+from .core.registry import supported_types
 from .core.result import SolveResult
+from .helpers.validation import SUPPORTED_PROXY_TYPES
 from .exceptions import (
     APIError,
     CaptchaAIError,
@@ -23,6 +25,8 @@ __all__ = [
     "CaptchaAI",
     "AsyncCaptchaAI",
     "SolveResult",
+    "supported_types",
+    "SUPPORTED_PROXY_TYPES",
     "CaptchaAIError",
     "InvalidKeyError",
     "ValidationError",

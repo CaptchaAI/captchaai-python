@@ -4,7 +4,7 @@ import pytest
 
 from captchaai.core.registry import get_entry
 from captchaai.exceptions import ValidationError
-from captchaai.helpers.validation import validate
+from captchaai.helpers.validation import SUPPORTED_PROXY_TYPES, validate, validate_proxy_options
 
 
 def test_validate_passes_when_required_params_present():
@@ -35,3 +35,13 @@ def test_validate_invalid_grid_size():
             },
             entry,
         )
+
+
+def test_validate_proxy_options_supports_http_and_https_only():
+    assert SUPPORTED_PROXY_TYPES == ("HTTP", "HTTPS")
+    assert validate_proxy_options("user:pass@host:port", "http") == "HTTP"
+    assert validate_proxy_options("user:pass@host:port", "HTTPS") == "HTTPS"
+
+    for unsupported in ("SOCKS4", "SOCKS5"):
+        with pytest.raises(ValidationError, match="Unsupported proxytype"):
+            validate_proxy_options("user:pass@host:port", unsupported)

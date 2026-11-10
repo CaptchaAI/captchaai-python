@@ -18,6 +18,7 @@ from .core.orchestrator import ApiCall, Sleep
 from .core.registry import get_entry
 from .core.result import SolveResult
 from .exceptions import APIError, InvalidKeyError, ThreadLimitError, ValidationError
+from .helpers.validation import validate_proxy_options
 from .transport.sync_http import SyncTransport
 
 
@@ -44,7 +45,7 @@ class CaptchaAI:
         Parameters:
             api_key: 32-character CaptchaAI key.
             proxy: optional "user:pass@host:port" applied to every solve.
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
             auto_retry: True (default) = SDK retries transient errors with
                 exponential backoff; False = raise immediately so you control
                 the retry loop. Ignored when max_retries is set.
@@ -64,9 +65,8 @@ class CaptchaAI:
         if not api_key or not isinstance(api_key, str) or len(api_key.strip()) != 32:
             raise InvalidKeyError("Key must be 32 characters")
 
-        # A proxy with no type cannot be forwarded correctly — fail fast.
-        if proxy and not proxytype:
-            raise ValidationError("proxytype is required when proxy is set")
+        # A proxy with no type or unsupported protocol cannot be forwarded — fail fast.
+        proxytype = validate_proxy_options(proxy, proxytype)
 
         # max_retries, when given, overrides both auto_retry and the retry count.
         # max_retries=0  → auto_retry=False (raise immediately)
@@ -145,9 +145,10 @@ class CaptchaAI:
 
         # Build a per-call config when a proxy override was provided.
         if proxy is not None:
-            if not proxytype:
-                raise ValidationError("proxytype is required when proxy is set")
-            cfg = dataclasses.replace(self._config, proxy=proxy, proxytype=proxytype)
+            normalized_proxytype = validate_proxy_options(proxy, proxytype)
+            cfg = dataclasses.replace(
+                self._config, proxy=proxy, proxytype=normalized_proxytype
+            )
         else:
             cfg = self._config
 
@@ -201,7 +202,7 @@ class CaptchaAI:
             lang: ISO language code hint, e.g. "en", "ru".
             instructions: custom text shown to the solver.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the recognised text.
@@ -239,7 +240,7 @@ class CaptchaAI:
             instructions: what to click, e.g. "crosswalks", "traffic lights".
             grid_size: grid dimensions — "3x3" or "4x4" (required by the API).
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is a list of cell indices to click.
@@ -270,7 +271,7 @@ class CaptchaAI:
             images: a non-empty list of images (each path/URL/base64/bytes).
             instructions: what the solver should do with the images.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult with the BLS answer.
@@ -309,7 +310,7 @@ class CaptchaAI:
             cookies: optional cookie string forwarded to the solver browser.
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the g-recaptcha-response token.
@@ -360,7 +361,7 @@ class CaptchaAI:
             cookies: optional cookie string forwarded to the solver browser.
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the v3 token.
@@ -399,7 +400,7 @@ class CaptchaAI:
             cookies: optional cookie string forwarded to the solver browser.
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the Turnstile token (plus user_agent).
@@ -432,7 +433,7 @@ class CaptchaAI:
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port". One of this or
                 the client-level proxy must be set.
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult with the challenge token (plus user_agent).
@@ -467,7 +468,7 @@ class CaptchaAI:
             cookies: optional cookie string forwarded to the solver browser.
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port".
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is a dict {challenge, validate, seccode}.
@@ -504,7 +505,7 @@ class CaptchaAI:
             user_agent: optional User-Agent header for the solver browser.
             proxy: per-call proxy override "user:pass@host:port". One of this or
                 the client-level proxy must be set (proxy is mandatory for this type).
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the token string and `user_agent` is
@@ -537,7 +538,7 @@ class CaptchaAI:
             url: the full page URL where the challenge appears.
             version: Friendly Captcha version — "v1" (default) or "v2".
             proxy: per-call proxy override "user:pass@host:port" (optional).
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is the verification token string.
@@ -572,7 +573,7 @@ class CaptchaAI:
             api_server: optional Lemin API subdomain override
                 (default: "api.leminnow.com").
             proxy: per-call proxy override "user:pass@host:port" (optional).
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
 
         Returns:
             SolveResult whose `solution` is a dict {"answer": "...",
@@ -587,9 +588,13 @@ class CaptchaAI:
     def threads_info(self) -> dict:
         """Return current thread usage: {"threads": int, "working_threads": int}.
 
-        A live account-health check — CaptchaAI is thread-based, not balance-based.
+        Live thread-usage check (see get_balance() for the account balance).
         """
         return self._drive_engine(orchestrator.get_thread_usage(self._config))
+
+    def get_balance(self) -> str:
+        """Return the raw account balance string (res.php action=getbalance)."""
+        return self._drive_engine(orchestrator.get_balance(self._config))
 
     # ── Manual two-step API (submit now, fetch later) ──────────────────────────
     def send(self, captcha_type: str, **params) -> str:

@@ -21,6 +21,7 @@ from .core.orchestrator import ApiCall, Sleep
 from .core.registry import get_entry
 from .core.result import SolveResult
 from .exceptions import APIError, ThreadLimitError, ValidationError
+from .helpers.validation import validate_proxy_options
 from .transport.async_http import AsyncTransport
 
 
@@ -64,7 +65,7 @@ class AsyncCaptchaAI:
         Parameters:
             api_key: 32-character CaptchaAI key.
             proxy: optional "user:pass@host:port" applied to every solve.
-            proxytype: required when proxy is set (HTTP/HTTPS/SOCKS4/SOCKS5).
+            proxytype: required when proxy is set (HTTP or HTTPS).
             auto_retry: True (default) = SDK retries transient errors with
                 exponential backoff; False = raise immediately so you control
                 the retry loop. Ignored when max_retries is set.
@@ -83,9 +84,8 @@ class AsyncCaptchaAI:
             ValidationError: if a proxy is given without a proxytype.
             InvalidKeyError: immediately if the key is wrong or does not exist.
         """
-        # A proxy with no type cannot be forwarded correctly — fail fast.
-        if proxy and not proxytype:
-            raise ValidationError("proxytype is required when proxy is set")
+        # A proxy with no type or unsupported protocol cannot be forwarded — fail fast.
+        proxytype = validate_proxy_options(proxy, proxytype)
 
         # max_retries, when given, overrides both auto_retry and the retry count.
         if max_retries is not None:
@@ -162,9 +162,10 @@ class AsyncCaptchaAI:
 
         # Build a per-call config when a proxy override was provided.
         if proxy is not None:
-            if not proxytype:
-                raise ValidationError("proxytype is required when proxy is set")
-            cfg = dataclasses.replace(self._config, proxy=proxy, proxytype=proxytype)
+            normalized_proxytype = validate_proxy_options(proxy, proxytype)
+            cfg = dataclasses.replace(
+                self._config, proxy=proxy, proxytype=normalized_proxytype
+            )
         else:
             cfg = self._config
 
@@ -432,6 +433,10 @@ class AsyncCaptchaAI:
     async def threads_info(self) -> dict:
         """Return {"threads": int, "working_threads": int}. See CaptchaAI.threads_info."""
         return await self._drive_engine(orchestrator.get_thread_usage(self._config))
+
+    async def get_balance(self) -> str:
+        """Return the raw account balance string (res.php action=getbalance)."""
+        return await self._drive_engine(orchestrator.get_balance(self._config))
 
     # ── Manual two-step API (submit now, fetch later) ──────────────────────────
     async def send(self, captcha_type: str, **params) -> str:

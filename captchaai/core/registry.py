@@ -260,3 +260,21 @@ def get_entry(name: str) -> CaptchaTypeEntry:
     except KeyError:
         # Unknown type is a caller mistake — fail fast with a clear message.
         raise ValidationError(f"Unknown captcha type: {name!r}")
+
+
+def supported_types() -> dict[str, dict]:
+    """Return a read-only summary of every registered captcha type.
+
+    Keys are SDK type names; values hold the fields useful to callers:
+    api_method, required_params, requires_proxy, returns_user_agent, has_image.
+    """
+    return {
+        name: {
+            "api_method": entry.api_method,
+            "required_params": list(entry.required_params),
+            "requires_proxy": entry.requires_proxy,
+            "returns_user_agent": entry.returns_user_agent,
+            "has_image": entry.has_image,
+        }
+        for name, entry in REGISTRY.items()
+    }

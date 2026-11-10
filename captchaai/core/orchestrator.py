@@ -200,6 +200,25 @@ def get_thread_usage(config: Config) -> Generator[Effect, object, dict]:
     raise_if_key_invalid(body)  # bad/unknown key → InvalidKeyError, before anything else
     return read_thread_counts(body)
 
+
+def get_balance(config: Config) -> Generator[Effect, object, str]:
+    """Ask the API for the account balance (res.php action=getbalance).
+
+    Returns the raw `request` string from the API response. Raises InvalidKeyError
+    for a bad key and APIError for any other failure or empty balance.
+    """
+    resp = yield ApiCall(
+        "POST",
+        build_endpoint_url(config, "res.php"),
+        {"key": config.api_key, "action": "getbalance", "json": 1},
+    )
+    body = get_body_or_raise(resp)
+    raise_if_key_invalid(body)
+    status, request = read_status_and_request(body)
+    if status != 1 or body.get("request") is None or not request:
+        raise APIError(f"getbalance failed: {request or 'empty response'}")
+    return request
+
 def submit_task(
     config: Config, entry: CaptchaTypeEntry, params: dict
 ) -> Generator[Effect, object, str]:
