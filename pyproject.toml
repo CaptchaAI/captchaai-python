@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "captchaai"
-version = "1.0.2"
+version = "1.0.3"
 description = "Official Python client for the CaptchaAI captcha-solving API."
 readme = "readme.md"
 requires-python = ">=3.10"
