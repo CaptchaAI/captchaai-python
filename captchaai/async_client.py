@@ -14,15 +14,27 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from typing import Any, Generator, TypeVar
 
+from .browser import engine as browser_engine
+from .browser.adapter import (
+    parse_playwright_proxy,
+    require_async_playwright,
+    to_async_driver,
+)
+from .browser.engine import BrowserEffect, ContextAddCookies, PageEval, PageUrl
+from .browser.scripts import RECAPTCHA_INIT_HOOK_JS
+from .browser.types import CaptchaParams, PageSolveResult
 from .core import orchestrator
 from .core.config import Config
-from .core.orchestrator import ApiCall, Sleep
+from .core.orchestrator import ApiCall, Effect, Sleep
 from .core.registry import get_entry
 from .core.result import SolveResult
 from .exceptions import APIError, ThreadLimitError, ValidationError
 from .helpers.validation import validate_proxy_options
 from .transport.async_http import AsyncTransport
+
+_T = TypeVar("_T")
 
 
 class AsyncCaptchaAI:
@@ -55,7 +67,7 @@ class AsyncCaptchaAI:
         base_url: str = "https://ocr.captchaai.com",
         thread_busy_timeout: float = 120.0,
         max_retries: int | None = None,
-    ) -> "AsyncCaptchaAI":
+    ) -> AsyncCaptchaAI:
         """Async constructor — build a fully validated, ready-to-use client.
 
         This is the one place an awaited call happens at construction. It performs a
@@ -121,7 +133,7 @@ class AsyncCaptchaAI:
         return self
 
     # ── The async driver: the ONLY async-specific glue in the whole SDK ────────
-    async def _drive_engine(self, engine):
+    async def _drive_engine(self, engine: Generator[Effect, object, _T]) -> _T:
         """Run an orchestrator step-by-step, doing each thing it asks for (async).
 
         Exactly the same decisions as the sync driver, but ApiCall awaits the async
@@ -450,6 +462,155 @@ class AsyncCaptchaAI:
         return await self._drive_engine(
             orchestrator.fetch_result(self._config, entry, task_id)
         )
+
+    # ── Playwright browser helpers ──────────────────────────────────────────────
+    async def _drive_browser_engine(
+        self,
+        page: Any,
+        engine: Generator[BrowserEffect, Any, _T],
+    ) -> _T:
+        """Run a sans-IO browser generator against an asynchronous Playwright Page."""
+        driver = to_async_driver(page)
+        try:
+            effect = next(engine)
+            while True:
+                if isinstance(effect, PageEval):
+                    val = await driver.evaluate(effect.script, effect.arg)
+                    effect = engine.send(val)
+                elif isinstance(effect, PageUrl):
+                    effect = engine.send(await driver.url())
+                elif isinstance(effect, ContextAddCookies):
+                    await driver.add_cookies(effect.cookies)
+                    effect = engine.send(True)
+                else:
+                    raise APIError(f"Unknown browser effect: {effect!r}")
+        except StopIteration as stop:
+            return stop.value
+
+    async def detect_captchas(self, page: Any) -> list[str]:
+        """Return deduplicated token-mode CAPTCHA types detected on `page`."""
+        return await self._drive_browser_engine(page, browser_engine.detect_captchas())
+
+    async def get_captchas_params(self, page: Any) -> list[CaptchaParams]:
+        """Extract `CaptchaParams` for every token-mode CAPTCHA on `page`."""
+        return await self._drive_browser_engine(
+            page, browser_engine.get_captchas_params()
+        )
+
+    async def inject_on_page(
+        self,
+        page: Any,
+        params: CaptchaParams,
+        result: SolveResult | str,
+    ) -> bool:
+        """Inject a solved token or `cf_clearance` cookie back into `page`."""
+        return await self._drive_browser_engine(
+            page, browser_engine.inject_on_page(params, result)
+        )
+
+    async def _solve_loaded_page(
+        self,
+        page: Any,
+        *,
+        autofill: bool,
+        throw_on_error: bool,
+        default_v3_action: str,
+        proxy: str | None,
+        proxytype: str | None,
+    ) -> list[PageSolveResult]:
+        results: list[PageSolveResult] = []
+        for item in await self.get_captchas_params(page):
+            try:
+                api_params = item.to_api_params(default_v3_action=default_v3_action)
+                solve_res = await self._solve_type(
+                    item.captcha_type,
+                    api_params,
+                    proxy=proxy,
+                    proxytype=proxytype,
+                )
+                injected = (
+                    await self.inject_on_page(page, item, solve_res)
+                    if autofill
+                    else False
+                )
+                results.append(
+                    PageSolveResult(
+                        params=item,
+                        result=solve_res,
+                        injected=injected,
+                    )
+                )
+            except Exception as exc:
+                if throw_on_error:
+                    raise
+                results.append(PageSolveResult(params=item, error=str(exc)))
+        return results
+
+    async def solve_url(
+        self,
+        url: str | None = None,
+        *,
+        page: Any | None = None,
+        headless: bool = True,
+        wait_timeout: float = 3000.0,
+        close_delay: float = 0.0,
+        autofill: bool = True,
+        throw_on_error: bool = False,
+        default_v3_action: str = "verify",
+        proxy: str | None = None,
+        proxytype: str | None = None,
+    ) -> list[PageSolveResult]:
+        """Solve and inject CAPTCHAs for `url` (launching Chromium) or an open `page`."""
+        if url is None and page is None:
+            raise ValidationError("Either url or page must be provided")
+
+        if page is not None:
+            if url is not None:
+                await page.context.add_init_script(RECAPTCHA_INIT_HOOK_JS)
+                await page.goto(url, wait_until="domcontentloaded")
+                if wait_timeout > 0:
+                    await page.wait_for_timeout(wait_timeout)
+            return await self._solve_loaded_page(
+                page,
+                autofill=autofill,
+                throw_on_error=throw_on_error,
+                default_v3_action=default_v3_action,
+                proxy=proxy,
+                proxytype=proxytype,
+            )
+
+        assert url is not None
+        effective_proxy = proxy if proxy is not None else self._config.proxy
+        effective_proxytype = proxytype if proxy is not None else self._config.proxytype
+        pw_proxy = parse_playwright_proxy(effective_proxy, effective_proxytype)
+        async_playwright = require_async_playwright()
+
+        async with async_playwright() as p:
+            launch_kwargs: dict[str, Any] = {"headless": headless}
+            if pw_proxy is not None:
+                launch_kwargs["proxy"] = pw_proxy
+            browser = await p.chromium.launch(**launch_kwargs)
+            try:
+                context = await browser.new_context()
+                owned_page = await context.new_page()
+                await owned_page.context.add_init_script(RECAPTCHA_INIT_HOOK_JS)
+                await owned_page.goto(url, wait_until="domcontentloaded")
+                if wait_timeout > 0:
+                    await owned_page.wait_for_timeout(wait_timeout)
+
+                results = await self._solve_loaded_page(
+                    owned_page,
+                    autofill=autofill,
+                    throw_on_error=throw_on_error,
+                    default_v3_action=default_v3_action,
+                    proxy=proxy,
+                    proxytype=proxytype,
+                )
+                if close_delay > 0:
+                    await owned_page.wait_for_timeout(close_delay * 1000)
+            finally:
+                await browser.close()
+        return results
 
     async def aclose(self) -> None:
         """Close the underlying async transport and release its connections."""

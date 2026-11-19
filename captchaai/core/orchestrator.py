@@ -32,6 +32,7 @@ from ..exceptions import (
 from ..helpers import extract, image, params as params_helper, retry, validation
 from .config import Config
 from .registry import CaptchaTypeEntry
+from .result import SolveResult
 
 # ── Effects: the only things the engine asks the driver to perform ─────────────
 @dataclass(frozen=True)
@@ -299,15 +300,15 @@ def submit_task(
         if status == 1:
             return request
 
-        code = request  # status==0 → request carries the error code
+        error_code = request  # status==0 → request carries the error code
 
         # Always-fatal submit errors: raise immediately, regardless of auto_retry.
-        if code in _SUBMIT_FATAL:
-            exc, message = _SUBMIT_FATAL[code]
+        if error_code in _SUBMIT_FATAL:
+            exc, message = _SUBMIT_FATAL[error_code]
             raise exc(message)
 
         # Thread cap hit: diagnose via threadsinfo, then retry or raise.
-        if code == "ERROR_ZERO_BALANCE":
+        if error_code == "ERROR_ZERO_BALANCE":
             # Sub-engine decides busy-vs-dead; returns True if we should retry.
             should_retry = yield from diagnose_account_when_busy(config)
             if not should_retry:
@@ -326,8 +327,8 @@ def submit_task(
             continue
 
         # Transient server/proxy errors: retry with backoff unless user opted out.
-        if code in _SUBMIT_RETRYABLE:
-            exc, message = _SUBMIT_RETRYABLE[code]
+        if error_code in _SUBMIT_RETRYABLE:
+            exc, message = _SUBMIT_RETRYABLE[error_code]
             if not config.auto_retry:
                 raise exc(message)  # user manages retries → surface immediately
             attempts += 1
@@ -337,7 +338,7 @@ def submit_task(
             continue
 
         # Anything unrecognised is an unexpected API response.
-        raise APIError(f"Unexpected submit error: {code or 'empty response'}")
+        raise APIError(f"Unexpected submit error: {error_code or 'empty response'}")
 
 
 def diagnose_account_when_busy(config: Config) -> Generator[Effect, object, bool]:
@@ -410,7 +411,7 @@ def poll_until_ready(
 
 def fetch_result(
     config: Config, entry: CaptchaTypeEntry, task_id: str
-) -> Generator[Effect, object, object]:
+) -> Generator[Effect, object, SolveResult]:
     """Fetch the result of a task that was already submitted separately.
 
     Used by the manual `get_result()` API (submit and fetch as two steps). Reuses
@@ -422,7 +423,7 @@ def fetch_result(
 
 def solve_captcha(
     config: Config, entry: CaptchaTypeEntry, params: dict
-) -> Generator[Effect, object, object]:
+) -> Generator[Effect, object, SolveResult]:
     """Solve one captcha from start to finish and return a SolveResult.
 
     Ties the three steps together: submit the task → wait and poll for the answer →

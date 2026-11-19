@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head><title>Turnstile Fixture</title></head>
+  <body>
+    <div
+      id="ts-widget"
+      class="cf-turnstile"
+      data-sitekey="0x4AAAAAAATestKey"
+      data-action="login"
+      data-cdata="cdata-xyz"
+      data-callback="onTurnstileSolved"
+    >
+      <input type="hidden" name="cf-turnstile-response" value="" />
+    </div>
+    <script>
+      window.tsCallbackToken = null;
+      window.onTurnstileSolved = function (token) {
+        window.tsCallbackToken = token;
+      };
+    </script>
+  </body>
+</html>

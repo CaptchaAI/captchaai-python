@@ -1,6 +1,6 @@
 # CaptchaAI SDK Examples
 
-Copy-paste cookbook for every captcha type and SDK feature. For API reference and option tables, see [captchaai/readme.md](captchaai/readme.md).
+Copy-paste cookbook for every captcha type and SDK feature. For API reference and option tables, see [README.md](README.md).
 
 ---
 
@@ -42,6 +42,11 @@ Copy-paste cookbook for every captcha type and SDK feature. For API reference an
   - [Retry behaviour](#retry-behaviour)
   - [Resource cleanup](#resource-cleanup)
   - [Mandatory-proxy types](#mandatory-proxy-types)
+- [Browser automation (Playwright)](#browser-automation-playwright)
+  - [One-shot URL solve (sync & async)](#one-shot-url-solve-sync--async)
+  - [Solving on an existing Playwright page](#solving-on-an-existing-playwright-page)
+  - [Manual detect, extract, and inject](#manual-detect-extract-and-inject)
+  - [Cloudflare Challenge with Playwright](#cloudflare-challenge-with-playwright)
 - [Placeholder reference](#placeholder-reference)
 
 ---
@@ -50,6 +55,13 @@ Copy-paste cookbook for every captcha type and SDK feature. For API reference an
 
 ```bash
 pip install captchaai
+```
+
+For [Browser automation (Playwright)](#browser-automation-playwright), install the optional Playwright extra:
+
+```bash
+pip install "captchaai[playwright]"
+playwright install chromium
 ```
 
 Requires **Python 3.10+**. Set your API key as an environment variable before running any example:
@@ -1468,6 +1480,159 @@ async def main():
     await solver.aclose()
 
 asyncio.run(main())
+```
+
+---
+
+## Browser automation (Playwright)
+
+Requires `pip install "captchaai[playwright]"`. Supports token-mode CAPTCHAs (`recaptcha_v2`, `recaptcha_v2_invisible`, `recaptcha_v2_enterprise`, `recaptcha_v3`, `recaptcha_v3_enterprise`, `turnstile`, and `cloudflare_challenge`).
+
+### One-shot URL solve (sync & async)
+
+Launch Chromium, install `RECAPTCHA_INIT_HOOK_JS` (capturing `grecaptcha.execute` actions and `turnstile.render` callbacks), detect, solve, autofill, and return `list[PageSolveResult]`:
+
+Sync:
+
+```python
+import os
+from captchaai import CaptchaAI
+
+solver = CaptchaAI(api_key=os.environ["CAPTCHAAI_API_KEY"])
+
+results = solver.solve_url(
+    "https://example.com",
+    headless=True,
+    wait_timeout=5000.0,       # ms to wait after domcontentloaded for widgets to mount
+    default_v3_action="verify",
+)
+for item in results:
+    print(item.params.captcha_type, item.injected, item.error)
+    if item.result:
+        print(item.result.solution)
+
+solver.close()
+```
+
+Async:
+
+```python
+import asyncio
+import os
+from captchaai import AsyncCaptchaAI
+
+async def main():
+    async with await AsyncCaptchaAI.create(api_key=os.environ["CAPTCHAAI_API_KEY"]) as solver:
+        results = await solver.solve_url(
+            "https://example.com",
+            headless=True,
+            throw_on_error=False,
+        )
+        for item in results:
+            print(item.params.captcha_type, item.injected, item.error)
+
+asyncio.run(main())
+```
+
+---
+
+### Solving on an existing Playwright page
+
+Pass `page=page` so you can interact with the form after `solve_url()` injects the token (the browser remains open):
+
+```python
+import os
+from playwright.sync_api import sync_playwright
+from captchaai import CaptchaAI
+
+solver = CaptchaAI(api_key=os.environ["CAPTCHAAI_API_KEY"])
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)
+    page = browser.new_page()
+
+    # Passing url + page installs RECAPTCHA_INIT_HOOK_JS before page.goto(url).
+    results = solver.solve_url("https://example.com/login", page=page, wait_timeout=5000.0)
+    if results and all(r.injected and r.error is None for r in results):
+        page.fill('input[name="email"]', "user@example.com")
+        page.fill('input[name="password"]', "secret")
+        page.click('button[type="submit"]')
+
+    browser.close()
+
+solver.close()
+```
+
+---
+
+### Manual detect, extract, and inject
+
+Use `detect_captchas()`, `get_captchas_params()`, and `inject_on_page()` directly for custom orchestration. Install `RECAPTCHA_INIT_HOOK_JS` before navigating so dynamic `grecaptcha.execute` / `turnstile.render` callbacks are captured:
+
+```python
+import os
+from playwright.sync_api import sync_playwright
+from captchaai import CaptchaAI, RECAPTCHA_INIT_HOOK_JS
+
+solver = CaptchaAI(api_key=os.environ["CAPTCHAAI_API_KEY"])
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    context = browser.new_context()
+    context.add_init_script(RECAPTCHA_INIT_HOOK_JS)
+    page = context.new_page()
+    page.goto("https://example.com", wait_until="domcontentloaded")
+    page.wait_for_timeout(3000)
+
+    print("Detected:", solver.detect_captchas(page))
+    for params in solver.get_captchas_params(page):
+        task_id = solver.send(params.captcha_type, **params.to_api_params())
+        res = solver.get_result(params.captcha_type, task_id)
+        injected = solver.inject_on_page(page, params, res)
+        print(params.captcha_type, injected)
+
+    browser.close()
+
+solver.close()
+```
+
+---
+
+### Cloudflare Challenge with Playwright
+
+`cloudflare_challenge` requires an `HTTP`/`HTTPS` proxy shared between Playwright and CaptchaAI (`cf_clearance` is IP- and UA-bound). For `cloudflare_challenge`, `inject_on_page()` adds `cf_clearance` into `page.context`, so reload the URL afterward to verify clearance:
+
+```python
+import os
+from playwright.sync_api import sync_playwright
+from captchaai import CaptchaAI
+from captchaai.browser.adapter import parse_playwright_proxy
+
+proxy = os.environ["CAPTCHAAI_PROXY"]              # "user:pass@host:port"
+proxytype = os.getenv("CAPTCHAAI_PROXYTYPE", "HTTP")
+url = "https://example.com"
+
+solver = CaptchaAI(
+    api_key=os.environ["CAPTCHAAI_API_KEY"],
+    proxy=proxy,
+    proxytype=proxytype,
+)
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(
+        headless=True,
+        proxy=parse_playwright_proxy(proxy, proxytype),
+    )
+    page = browser.new_page()
+    results = solver.solve_url(url, page=page)
+    if results and results[0].injected and results[0].result:
+        if results[0].result.user_agent:
+            page.set_extra_http_headers({"User-Agent": results[0].result.user_agent})
+        page.goto(url, wait_until="domcontentloaded")
+        print(page.title())
+    browser.close()
+
+solver.close()
 ```
 
 ---

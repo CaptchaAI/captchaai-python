@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head><title>reCAPTCHA v2 Fixture</title></head>
+  <body>
+    <form id="login-form">
+      <div id="rc-box" class="g-recaptcha" data-sitekey="v2-sitekey-123" data-callback="onV2Solved" data-action="action">
+        <textarea name="g-recaptcha-response"></textarea>
+      </div>
+    </form>
+    <script>
+      window.v2CallbackToken = null;
+      window.onV2Solved = function (token) {
+        window.v2CallbackToken = token;
+      };
+      window.grecaptcha = window.grecaptcha || {};
+      window.___grecaptcha_cfg = {
+        enterprise: [],
+        clients: {
+          "0": {
+            id: 0,
+            O: {
+              O: {
+                sitekey: "v2-sitekey-123",
+                size: null,
+                action: "action",
+                callback: "onV2Solved"
+              }
+            },
+            QP: document.getElementById("rc-box")
+          }
+        }
+      };
+    </script>
+  </body>
+</html>

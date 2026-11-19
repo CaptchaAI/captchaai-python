@@ -8,11 +8,11 @@
   <a href="https://github.com/CaptchaAI/captchaai-python/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License" /></a>
 </p>
 
-CaptchaAI Python library — an official CAPTCHA solver and solving API client for reCAPTCHA v2/v3/Enterprise, Cloudflare Turnstile, Cloudflare Challenge, GeeTest v3, and image CAPTCHAs.
+CaptchaAI Python library (`v2.0.0`, Python `>=3.10`, typed via `py.typed`) — an official CAPTCHA solver and solving API client for reCAPTCHA v2/v3/Enterprise, Cloudflare Turnstile, Cloudflare Challenge, GeeTest v3, CaptchaFox, Friendly Captcha, Lemin, and image CAPTCHAs, with optional Playwright browser automation.
 
-Call one method per captcha type; the SDK handles HTTP, polling, retries, and typed error mapping.
+Call one method per captcha type; the SDK handles HTTP, polling, retries, and typed error mapping via a sans-IO generator engine.
 
-For full copy-paste examples of every captcha type and SDK feature, see [examples.md](https://github.com/CaptchaAI/captchaai-python/blob/main/examples.md).
+For full copy-paste examples of every captcha type and SDK feature, see [examples.md](https://github.com/CaptchaAI/captchaai-python/blob/main/examples.md). For internal design details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -26,13 +26,15 @@ For full copy-paste examples of every captcha type and SDK feature, see [example
 - [Normal captcha](#normal-captcha)
 - [Grid captcha](#grid-captcha)
 - [BLS captcha](#bls-captcha)
-- [reCAPTCHA v2 & v3](#recaptcha-v2)
+- [reCAPTCHA v2](#recaptcha-v2)
+- [reCAPTCHA v3](#recaptcha-v3)
 - [Cloudflare Turnstile](#cloudflare-turnstile)
 - [Cloudflare Challenge](#cloudflare-challenge)
 - [GeeTest v3](#geetest-v3)
-- [CaptchaFox (beta)](#captchafox-beta)
-- [Friendly Captcha (beta)](#friendly-captcha-beta)
-- [Lemin (beta)](#lemin-beta)
+- [CaptchaFox](#captchafox)
+- [Friendly Captcha](#friendly-captcha)
+- [Lemin](#lemin)
+- [Browser automation (Playwright)](#browser-automation-playwright)
 - [Other methods](#other-methods)
 - [Error handling](#error-handling)
 - [Proxies](#proxies)
@@ -50,13 +52,22 @@ For full copy-paste examples of every captcha type and SDK feature, see [example
 
 ## Installation
 
+Requires **Python 3.10+** (runtime dependency: `httpx`):
+
 ```bash
 pip install captchaai
 ```
 
+To enable optional Playwright browser helpers (`detect_captchas`, `get_captchas_params`, `inject_on_page`, `solve_url`):
+
+```bash
+pip install "captchaai[playwright]"
+playwright install chromium
+```
+
 ## Configuration
 
-Create a sync client with your API key from [CaptchaAI](https://captchaai.com/). The constructor validates the key and reads the account thread cap via a startup `threadsinfo` call.
+Create a sync client with your API key from [CaptchaAI](https://captchaai.com/). `CaptchaAI` validates the 32-character key length locally and reads the account thread cap via a startup `threadsinfo` call (`AsyncCaptchaAI.create()` delegates key validation to the startup `threadsinfo` call).
 
 ```python
 from captchaai import CaptchaAI
@@ -64,7 +75,7 @@ from captchaai import CaptchaAI
 solver = CaptchaAI(
     api_key="YOUR_32_CHAR_API_KEY",
     proxy="user:pass@host:port",       # optional
-    proxytype="HTTP",                  # required when proxy is set
+    proxytype="HTTP",                  # required when proxy is set ("HTTP" or "HTTPS")
     auto_retry=True,
     base_url="https://ocr.captchaai.com",
     thread_busy_timeout=120.0,
@@ -76,13 +87,13 @@ solver = CaptchaAI(
 |--------|---------|-------------|
 | `api_key` | *(required)* | 32-character CaptchaAI API key |
 | `proxy` | `None` | `"user:pass@host:port"` applied to every solve |
-| `proxytype` | `None` | `HTTP` / `HTTPS` — required when `proxy` is set |
-| `auto_retry` | `True` | `True` = SDK retries transient errors with backoff; `False` = raise immediately |
+| `proxytype` | `None` | `"HTTP"` or `"HTTPS"` — required when `proxy` is set |
+| `auto_retry` | `True` | `True` = SDK retries transient/proxy/busy-thread errors with backoff; `False` = fail fast (including local in-flight thread-cap gating) |
 | `base_url` | `https://ocr.captchaai.com` | API host for `in.php` / `res.php` |
-| `thread_busy_timeout` | `120.0` | Seconds to keep retrying while all account threads are busy |
-| `max_retries` | `None` | When set: `0` disables retries; `N > 0` enables up to N submit attempts (supersedes `auto_retry`) |
+| `thread_busy_timeout` | `120.0` | Logical seconds budget to keep retrying while all account threads are busy |
+| `max_retries` | `None` | When set: `0` disables retries (`auto_retry=False`); `N > 0` enables retries with up to `N` submit attempts (supersedes `auto_retry`) |
 
-A bad key raises `InvalidKeyError` before any solve runs. Call `solver.close()` when finished to release the HTTP client.
+A bad key raises `InvalidKeyError` before any solve runs. Call `solver.close()` when finished to release the HTTP client (`CaptchaAI` does not implement `__enter__`/`__exit__`; use `async with` on `AsyncCaptchaAI`).
 
 ---
 
@@ -106,7 +117,7 @@ Reuse `result.user_agent` on the target site when it is present (Enterprise, Clo
 
 ## Normal captcha
 
-Solve a text/image captcha. `image` may be a file path, URL, data-URI, raw base64, or `bytes`.
+Solve a text/image captcha. `image` may be a file path, URL, data-URI, raw base64, or `bytes`. PNG and GIF images are checked locally and must not exceed `1000px` in width or height.
 
 ```python
 from captchaai import CaptchaAI
@@ -191,7 +202,7 @@ print(result.user_agent)
 
 ## reCAPTCHA v3
 
-Solve reCAPTCHA v3. `min_score` defaults to `0.3`. Enterprise results include `user_agent`.
+Solve reCAPTCHA v3. `action` is required; `min_score` defaults to `None` (omitted unless set, e.g. `0.1`–`0.9`). Enterprise results include `user_agent`.
 
 ```python
 # Standard v3
@@ -217,13 +228,12 @@ result = solver.recaptcha_v3(
 
 ## Cloudflare Turnstile
 
-Solve a Cloudflare Turnstile challenge. Optional: `action`, `cdata`, `user_agent`.
+Solve a Cloudflare Turnstile challenge. Optional: `cookies`, `user_agent`, `proxy`, `proxytype`.
 
 ```python
 result = solver.turnstile(
     sitekey="0x4AAAAAAAB...",
     url="https://example.com",
-    action="login",
 )
 print(result.solution)
 ```
@@ -232,17 +242,16 @@ print(result.solution)
 
 ## Cloudflare Challenge
 
-Solve Cloudflare Challenge (5s / Managed / Non-Interactive). **A working proxy is required.**
+Solve Cloudflare Challenge (5s / Managed / Non-Interactive). **A working proxy is required** (`HTTP` or `HTTPS`, via client config or per-call override). Optional: `cookies`, `user_agent`.
 
 ```python
 result = solver.cloudflare_challenge(
     url="https://example.com",
-    html="<html>...</html>",                 # full page HTML
-    proxy="user:pass@host:port",             # required
+    proxy="user:pass@host:port",             # required (or set at client level)
     proxytype="HTTP",                        # required
-    user_agent="Mozilla/5.0 ...",            # must match the session that fetched the HTML
+    user_agent="Mozilla/5.0 ...",            # optional
 )
-print(result.solution)                       # clearance cf_clearance cookie or token
+print(result.solution)                       # cf_clearance cookie / token
 print(result.user_agent)
 ```
 
@@ -250,24 +259,24 @@ print(result.user_agent)
 
 ## GeeTest v3
 
-Solve a GeeTest v3 challenge. Requires `gt`, `challenge`, and `url`. Optional: `api_server`.
+Solve a GeeTest v3 challenge. Requires `gt`, `challenge`, and `url`. Optional: `cookies`, `user_agent`, `proxy`, `proxytype`. Returns a structured dict with `challenge`, `validate`, and `seccode`.
 
 ```python
-result = solver.geetest_v3(
+result = solver.geetest(
     gt="YOUR_GT",
     challenge="YOUR_CHALLENGE",
     url="https://example.com",
 )
-print(result.solution["geetest_challenge"])
-print(result.solution["geetest_validate"])
-print(result.solution["geetest_seccode"])
+print(result.solution["challenge"])
+print(result.solution["validate"])
+print(result.solution["seccode"])
 ```
 
 ---
 
-## CaptchaFox (beta)
+## CaptchaFox
 
-Solve CaptchaFox. **A working proxy is required.**
+Solve CaptchaFox. **A working proxy is required.** Returns the solution token and a `user_agent` to reuse on the target site.
 
 ```python
 result = solver.captchafox(
@@ -277,11 +286,12 @@ result = solver.captchafox(
     proxytype="HTTP",
 )
 print(result.solution)
+print(result.user_agent)
 ```
 
 ---
 
-## Friendly Captcha (beta)
+## Friendly Captcha
 
 Solve Friendly Captcha (v1 or v2). No proxy is required.
 
@@ -296,7 +306,7 @@ print(result.solution)
 
 ---
 
-## Lemin (beta)
+## Lemin
 
 Solve a Lemin puzzle. `solution` is a dict with `answer` and `challenge_uuid`.
 
@@ -310,6 +320,44 @@ result = solver.lemin(
 print(result.solution["answer"])
 print(result.solution["challenge_uuid"])
 ```
+
+---
+
+## Browser automation (Playwright)
+
+With `pip install "captchaai[playwright]"`, both `CaptchaAI` and `AsyncCaptchaAI` provide token-mode CAPTCHA detection, parameter extraction, solving, and page injection for Playwright (`reCAPTCHA v2/v3/Enterprise`, `Turnstile`, and `Cloudflare Challenge`):
+
+```python
+# One-shot: launch Chromium, detect CAPTCHAs, solve, and autofill
+results = solver.solve_url("https://example.com", headless=True)
+for item in results:
+    print(item.params.captcha_type, item.injected, item.error)
+    if item.result:
+        print(item.result.solution)
+```
+
+You can also pass an already-open Playwright `page` (left open after solving) or use the lower-level building blocks:
+
+```python
+from captchaai import RECAPTCHA_INIT_HOOK_JS
+
+# Install hook before navigation so dynamic callbacks / v3 actions are captured
+page.context.add_init_script(RECAPTCHA_INIT_HOOK_JS)
+page.goto("https://example.com")
+
+# Option A: solve & autofill an already-open page
+results = solver.solve_url(page=page)
+
+# Option B: inspect and inject manually
+detected = solver.detect_captchas(page)           # e.g. ["recaptcha_v2", "turnstile"]
+params_list = solver.get_captchas_params(page)    # list[CaptchaParams]
+for params in params_list:
+    task_id = solver.send(params.captcha_type, **params.to_api_params())
+    res = solver.get_result(params.captcha_type, task_id)
+    solver.inject_on_page(page, params, res)
+```
+
+> **Note:** `solve_url()` installs `RECAPTCHA_INIT_HOOK_JS` automatically when given a `url`. For `cloudflare_challenge`, `inject_on_page()` adds the `cf_clearance` cookie directly to `page.context`.
 
 ---
 
@@ -346,6 +394,17 @@ task_id = solver.send(
 
 result = solver.get_result("recaptcha_v2", task_id)
 print(result.solution)
+```
+
+### Supported types metadata
+
+Inspect all 14 registered captcha types and their requirements:
+
+```python
+from captchaai import supported_types
+
+types_map = supported_types()
+print(list(types_map.keys()))
 ```
 
 ### Close
@@ -431,22 +490,19 @@ result = solver.recaptcha_v2(
 
 ## Async usage
 
-Build the async client with `await AsyncCaptchaAI.create(...)`:
+`AsyncCaptchaAI` mirrors every solver, utility, and Playwright browser method as `async def`. Direct `AsyncCaptchaAI(...)` instantiation is blocked — always construct it via `await AsyncCaptchaAI.create(...)`, and close via `await solver.aclose()` or `async with`:
 
 ```python
 import asyncio
 from captchaai import AsyncCaptchaAI
 
 async def main():
-    solver = await AsyncCaptchaAI.create(api_key="YOUR_32_CHAR_API_KEY")
-
-    result = await solver.turnstile(
-        sitekey="YOUR_SITEKEY",
-        url="https://example.com",
-    )
-    print(result.solution)
-
-    await solver.aclose()
+    async with await AsyncCaptchaAI.create(api_key="YOUR_32_CHAR_API_KEY") as solver:
+        result = await solver.turnstile(
+            sitekey="YOUR_SITEKEY",
+            url="https://example.com",
+        )
+        print(result.solution)
 
 asyncio.run(main())
 ```

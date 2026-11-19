@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>reCAPTCHA v3 Fixture</title>
+    <script src="https://www.google.com/recaptcha/api.js?render=v3-sitekey-456"></script>
+  </head>
+  <body>
+    <script>
+      window.grecaptcha = window.grecaptcha || {};
+      window.grecaptcha.execute = function () {
+        return Promise.resolve("stub-v3");
+      };
+      window.grecaptcha.execute("v3-sitekey-456", { action: "checkout" });
+    </script>
+  </body>
+</html>

@@ -4,6 +4,8 @@
 # result type, and the full exception hierarchy.
 
 from .async_client import AsyncCaptchaAI
+from .browser.scripts import RECAPTCHA_INIT_HOOK_JS
+from .browser.types import CaptchaParams, PageSolveResult
 from .client import CaptchaAI
 from .core.registry import supported_types
 from .core.result import SolveResult
@@ -25,6 +27,9 @@ __all__ = [
     "CaptchaAI",
     "AsyncCaptchaAI",
     "SolveResult",
+    "CaptchaParams",
+    "PageSolveResult",
+    "RECAPTCHA_INIT_HOOK_JS",
     "supported_types",
     "SUPPORTED_PROXY_TYPES",
     "CaptchaAIError",
