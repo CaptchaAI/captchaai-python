@@ -16,10 +16,6 @@ dependencies = [
     "httpx",
 ]
 
-[project.optional-dependencies]
-playwright = [
-    "playwright>=1.40",
-]
 keywords = [
     "captcha",
     "captchaai",
@@ -60,6 +56,11 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.40",
 ]
 
 [project.urls]
