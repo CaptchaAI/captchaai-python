@@ -344,6 +344,10 @@ INJECT_RECAPTCHA_JS: str = """
 
 GET_TURNSTILE_PARAMS_JS: str = """
 (() => {
+  // Full-page Cloudflare Challenge embeds an internal Turnstile widget; let cloudflare_challenge win.
+  if (window._cf_chl_opt || document.querySelector("#challenge-running, #challenge-form")) {
+    return [];
+  }
   const results = [];
   const seen = new Set();
   const ua = navigator.userAgent;

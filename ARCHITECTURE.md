@@ -1,6 +1,6 @@
 # CaptchaAI Python SDK — Architecture & Implementation
 
-**Package:** `captchaai` (`v2.0.0`, Python `>=3.10`, typed via `py.typed`)  
+**Package:** `captchaai` (`v2.0.1`, Python `>=3.10`, typed via `py.typed`)  
 **Runtime Dependency:** `httpx` (optional `playwright>=1.40` via `captchaai[playwright]`)  
 **Default Endpoint:** `https://ocr.captchaai.com` (`in.php` for task submission, `res.php` for polling, balance, and thread diagnostics)
 

@@ -1600,7 +1600,7 @@ solver.close()
 
 ### Cloudflare Challenge with Playwright
 
-`cloudflare_challenge` requires an `HTTP`/`HTTPS` proxy shared between Playwright and CaptchaAI (`cf_clearance` is IP- and UA-bound). For `cloudflare_challenge`, `inject_on_page()` adds `cf_clearance` into `page.context`, so reload the URL afterward to verify clearance:
+`cloudflare_challenge` requires a static/sticky `HTTP`/`HTTPS` proxy shared between Playwright and CaptchaAI (`cf_clearance` is IP- and UA-bound). Pass `autofill=False` to `solve_url()`, then open a fresh browser context with `user_agent=result.user_agent` and call `inject_on_page()` before navigating so `cf_clearance` is sent on a clean connection with the matching User-Agent:
 
 ```python
 import os
@@ -1608,7 +1608,7 @@ from playwright.sync_api import sync_playwright
 from captchaai import CaptchaAI
 from captchaai.browser.adapter import parse_playwright_proxy
 
-proxy = os.environ["CAPTCHAAI_PROXY"]              # "user:pass@host:port"
+proxy = os.environ["CAPTCHAAI_PROXY"]              # static/sticky "user:pass@host:port"
 proxytype = os.getenv("CAPTCHAAI_PROXYTYPE", "HTTP")
 url = "https://example.com"
 
@@ -1619,17 +1619,22 @@ solver = CaptchaAI(
 )
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(
-        headless=True,
-        proxy=parse_playwright_proxy(proxy, proxytype),
-    )
+    pw_proxy = parse_playwright_proxy(proxy, proxytype)
+    browser = p.chromium.launch(headless=True, proxy=pw_proxy)
     page = browser.new_page()
-    results = solver.solve_url(url, page=page)
-    if results and results[0].injected and results[0].result:
-        if results[0].result.user_agent:
-            page.set_extra_http_headers({"User-Agent": results[0].result.user_agent})
-        page.goto(url, wait_until="domcontentloaded")
-        print(page.title())
+    results = solver.solve_url(url, page=page, autofill=False)
+
+    if results and results[0].result and results[0].error is None:
+        solved_ua = results[0].result.user_agent
+        fresh_context = browser.new_context(
+            **({"user_agent": solved_ua} if solved_ua else {})
+        )
+        fresh_page = fresh_context.new_page()
+        solver.inject_on_page(fresh_page, results[0].params, results[0].result)
+        fresh_page.goto(url, wait_until="domcontentloaded")
+        print(fresh_page.title())
+        fresh_context.close()
+
     browser.close()
 
 solver.close()

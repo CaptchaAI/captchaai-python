@@ -8,7 +8,7 @@
   <a href="https://github.com/CaptchaAI/captchaai-python/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License" /></a>
 </p>
 
-CaptchaAI Python library (`v2.0.0`, Python `>=3.10`, typed via `py.typed`) — an official CAPTCHA solver and solving API client for reCAPTCHA v2/v3/Enterprise, Cloudflare Turnstile, Cloudflare Challenge, GeeTest v3, CaptchaFox, Friendly Captcha, Lemin, and image CAPTCHAs, with optional Playwright browser automation.
+CaptchaAI Python library (`v2.0.1`, Python `>=3.10`, typed via `py.typed`) — an official CAPTCHA solver and solving API client for reCAPTCHA v2/v3/Enterprise, Cloudflare Turnstile, Cloudflare Challenge, GeeTest v3, CaptchaFox, Friendly Captcha, Lemin, and image CAPTCHAs, with optional Playwright browser automation.
 
 Call one method per captcha type; the SDK handles HTTP, polling, retries, and typed error mapping via a sans-IO generator engine.
 

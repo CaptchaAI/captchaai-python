@@ -597,6 +597,21 @@ def test_playwright_html_fixtures_detect_extract_and_inject() -> None:
             assert client.inject_on_page(page, sa_params[0], "tok-sa") is True
             assert page.evaluate("() => window.saTok") == "tok-sa"
             assert page.evaluate("() => document.querySelector('textarea[name=\"g-recaptcha-response\"]').value") == "tok-sa"
+
+            # Full-page Cloudflare Challenge with embedded Turnstile must resolve to cloudflare_challenge.
+            cf_embedded_html = """<!doctype html><body>
+                <div id="cf-shadow"></div>
+                <script>
+                  window._cf_chl_opt = { cType: "managed" };
+                  window.__captchaai_turnstiles = [{ sitekey: "0x4EmbeddedChallengeKey" }];
+                  const sr = document.getElementById("cf-shadow").attachShadow({ mode: "open" });
+                  const frame = document.createElement("iframe");
+                  frame.src = "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/xyz/0x4EmbeddedChallengeKey/dark";
+                  sr.appendChild(frame);
+                </script>
+                </body>"""
+            page.goto("data:text/html," + quote(cf_embedded_html), wait_until="load")
+            assert client.detect_captchas(page) == ["cloudflare_challenge"]
         finally:
             browser.close()
     client.close()
